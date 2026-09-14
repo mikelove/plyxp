@@ -61,14 +61,20 @@
 #' vec_slice(S4Vectors::Rle(rep(1:3, each = 3)), i = 5)
 #'
 #' @export
-vec_slice <- S7::new_generic("vec_slice",
+vec_slice <- S7::new_generic(
+  "vec_slice",
   dispatch_args = "x",
   function(x, i, ...) {
     S7_dispatch()
   }
 )
 
-method(vec_slice, class_vctrs) <- function(x, i, ..., error_call = current_env()) {
+method(vec_slice, class_vctrs) <- function(
+  x,
+  i,
+  ...,
+  error_call = current_env()
+) {
   vctrs::vec_slice(x, i, ..., error_call = error_call)
 }
 
@@ -80,7 +86,7 @@ method(vec_slice, getClass("CompressedGRangesList")) <- function(x, i, ...) {
 
   gr <- IRanges::extractROWS(x@unlistData, vctrs::vec_c(rlang::splice(seqs)))
 
-  cgr <- as(gr, "CompressedGRangesList")
+  # cgr <- as(gr, "CompressedGRangesList")
   S4Vectors::new2(
     "CompressedGRangesList",
     unlistData = gr,
@@ -110,17 +116,26 @@ method(vec_slice, class_s4_vctrs) <- function(x, i, ...) {
 method(vec_slice, class_DF) <- function(x, i, ...) {
   x@listData <- purrr::map(x@listData, vec_slice, i = i)
   x@nrows <- length(i)
-  if (!is.null(x@elementMetadata)) {
-    x@elementMetadata <- Recall(x = x@elementMetadata, i = i)
+  if (!is.null(rnames <- rownames(x))) {
+    x@rownames <- vec_slice(rnames, i = i)
   }
   x
 }
 
-vec_chop2 <- new_generic("vec_chop2", dispatch_args = "x", function(x, ..., indices = NULL) {
-  S7_dispatch()
-})
+vec_chop2 <- new_generic(
+  "vec_chop2",
+  dispatch_args = "x",
+  function(x, ..., indices = NULL) {
+    S7_dispatch()
+  }
+)
 
-method(vec_chop2, class_vctrs) <- function(x, ..., indices = NULL, sizes = NULL) {
+method(vec_chop2, class_vctrs) <- function(
+  x,
+  ...,
+  indices = NULL,
+  sizes = NULL
+) {
   vctrs::vec_chop(x = x, ..., indices = indices, sizes = sizes)
 }
 
@@ -131,7 +146,6 @@ method(vec_chop2, class_s4_vctrs) <- function(x, ..., indices = NULL) {
   }
   purrr::map(indices, fun, x = x)
 }
-
 
 # cgr_as_lst <- function(x) {
 #   n <- length(x)

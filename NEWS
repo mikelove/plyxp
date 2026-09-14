@@ -1,3 +1,18 @@
+## plyxp 1.7.4
+
+* `method(vec_slice, class_DF)` now properly slices the rownames instead of the elementMetadata
+* Added Preprint to README
+* fixed show_tidy bug with "vec_restore.vec_phantom", now using internal `vec_slice` to extract rows
+* Addining a `vec_size` variant for support of vec_phantom
+
+## plyxp 1.7.2
+
+* `mutate.PlySummarizedExperiment` can now remove assays with `NULL` in the assays context.
+
+## plyxp 1.6.1
+
+* Corrected regression of 1.4.2
+
 ## plyxp 1.5.5
 
 * `plyxp::vec_ptype_common` should now be aware of the vctrs_partial class.

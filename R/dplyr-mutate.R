@@ -39,11 +39,13 @@ mutate_se_impl <- function(.data, ...) {
     ...,
     .ctx = c("assays", "rows", "cols"),
     .trans = list(
-      assays = quote(\(.data) matrix(
-        .data,
-        nrow = `plyxp:::ctx:::nrow`,
-        ncol = `plyxp:::ctx:::ncol`
-      ))
+      assays = quote(\(.data) {
+        enforce_2d_size(
+          .data,
+          .nrow = `plyxp:::ctx:::nrow`,
+          .ncol = `plyxp:::ctx:::ncol`
+        )
+      })
     )
   )
   ctxs <- vapply(quos, attr, FUN.VALUE = "", which = "plyxp:::ctx")
@@ -79,9 +81,60 @@ mutate_se_impl <- function(.data, ...) {
   dim_nms <- dimnames(.data)
   for (i in seq_along(results$assays)) {
     new_assay <- results$assays[[i]]
-    dimnames(new_assay) <- dim_nms
+    if (!is.null(new_assay)) {
+      # could be removing in which we cannot set
+      # this attrib
+      dimnames(new_assay) <- dim_nms
+    }
     assay(.data, nms[i], withDimnames = FALSE) <- new_assay
   }
 
   .data
+}
+
+
+enforce_2d_size <- function(
+  .data,
+  .nrow,
+  .ncol
+) {
+  dims <- dim(.data)
+  ndim <- length(dims)
+  if (ndim >= 2L) {
+    if (!all(dims[1L:2L] == c(.nrow, .ncol))) {
+      stop(
+        sprintf(
+          "Assay dimensions (%i, %i) do not match expected dimensions (%i, %i)",
+          dims[1L],
+          dims[2L],
+          .nrow,
+          .ncol
+        )
+      )
+    }
+    return(.data)
+  }
+  n <- if (ndim == 0) vec_size(.data) else prod(dims)
+  div <- 1L
+  # if data is not scalar
+  if (n != 1L) {
+    p <- .nrow * .ncol
+    r <- n %% p
+    if (r != 0) {
+      stop(
+        sprintf(
+          "Assay length (%i) is not a equal to or a multiple of expected dimensions (%i, %i)",
+          n,
+          .nrow,
+          .ncol
+        )
+      )
+    }
+    div <- n / p
+  }
+  if (div == 1L) {
+    matrix(.data, nrow = .nrow, ncol = .ncol)
+  } else {
+    array(.data, dim = c(.nrow, .ncol, div))
+  }
 }
