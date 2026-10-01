@@ -20,7 +20,7 @@
 #' slice_min(gse, rows(length), n = 1)
 #' @export
 slice_min.PlySummarizedExperiment <- function(
-    .data, ..., n = 1, prop = NULL, with_ties = TRUE, na_rm = FALSE,
+    .data, ..., n = NULL, prop = NULL, with_ties = TRUE, na_rm = FALSE,
     .preserve = FALSE) {
   plyxp(.data, slice_min_se_impl, ...,
     n = n, prop = prop, with_ties = with_ties, na_rm = na_rm,
@@ -29,12 +29,15 @@ slice_min.PlySummarizedExperiment <- function(
 }
 
 slice_min_se_impl <- function(
-    .data, ..., n = 1, prop = NULL, with_ties = TRUE, na_rm = FALSE,
+    .data, ..., n = NULL, prop = NULL, with_ties = TRUE, na_rm = FALSE,
     .preserve = FALSE) {
   .env <- caller_env()
 
   if (!is.null(n) && !is.null(prop)) {
     rlang::abort("Cannot use both `n` and `prop` in `slice_min()`.")
+  }
+  if (is.null(n) && is.null(prop)) {
+    n <- 1
   }
 
   # Build the transform as a quoted lambda so it can be inlined by plyxp_quos.
@@ -42,27 +45,26 @@ slice_min_se_impl <- function(
   # leaving `plyxp:::ctx:::n` unsubstituted so it resolves to the current
   # group size at evaluation time (matching the same pattern as slice()'s
   # in_bounds transform).
-  take_min <- if (!is.null(prop)) {
-    bquote(\(.x) {
-      na_last <- if (.(na_rm)) TRUE else NA
-      k <- ceiling(.(prop) * `plyxp:::ctx:::n`)
-      if (.(with_ties)) {
-        which(rank(.x, ties.method = "min", na.last = na_last) <= k)
-      } else {
-        order(.x, na.last = na_last)[seq_len(min(k, `plyxp:::ctx:::n`))]
-      }
-    })
-  } else {
-    bquote(\(.x) {
-      na_last <- if (.(na_rm)) TRUE else NA
-      k <- min(.(n), `plyxp:::ctx:::n`)
-      if (.(with_ties)) {
-        which(rank(.x, ties.method = "min", na.last = na_last) <= .(n))
-      } else {
-        order(.x, na.last = na_last)[seq_len(k)]
-      }
-    })
-  }
+  #
+  # Following dplyr, the result is sorted by value, `prop` is rounded down,
+  # and missing values sort last (they are dropped when `na_rm = TRUE`).
+  take_min <- bquote(\(.x) {
+    k <- if (is.null(.(prop))) .(n) else floor(.(prop) * `plyxp:::ctx:::n`)
+    idx <- order(.x, na.last = if (.(na_rm)) NA else TRUE)
+    k <- min(k, length(idx))
+    if (k < 1) {
+      return(integer())
+    }
+    if (.(with_ties)) {
+      # rank against the full vector so indices are never shifted by NAs;
+      # all NAs tie with each other as the largest value
+      r <- rank(.x, ties.method = "min", na.last = "keep")
+      r[is.na(r)] <- sum(!is.na(.x)) + 1L
+      idx[r[idx] <= r[idx[k]]]
+    } else {
+      idx[seq_len(k)]
+    }
+  })
 
   quos <- plyxp_quos(
     ...,
